@@ -23,44 +23,75 @@ import WORKER_PLUGIN_SYMBOL from './symbol';
 const NAME = 'WorkerPluginLoader';
 let hasWarned = false;
 
+let nId = 0;
+
 export function pitch (request) {
   this.cacheable(false);
   const cb = this.async();
 
   const compilerOptions = this._compiler.options || {};
 
-  const pluginOptions = compilerOptions.plugins.find(p => p[WORKER_PLUGIN_SYMBOL]).options;
+  const pluginOptions = compilerOptions.plugins.find(
+    p => p[WORKER_PLUGIN_SYMBOL]
+  ).options;
 
-  if (pluginOptions.globalObject == null && !hasWarned && compilerOptions.output && compilerOptions.output.globalObject === 'window') {
+  if (
+    pluginOptions.globalObject == null &&
+    !hasWarned &&
+    compilerOptions.output &&
+    compilerOptions.output.globalObject === 'window'
+  ) {
     hasWarned = true;
-    console.warn('Warning (worker-plugin): output.globalObject is set to "window". It must be set to "self" to support HMR in Workers.');
+    console.warn(
+      'Warning (worker-plugin): output.globalObject is set to "window". It must be set to "self" to support HMR in Workers.'
+    );
   }
 
-  const options = loaderUtils.getOptions(this) || {};
-  const chunkFilename = compilerOptions.output.chunkFilename.replace(/\.([a-z]+)$/i, '.worker.$1');
+  const options = loaderUtils.getOptions(this) || { name: `worker${++nId}` };
+  const chunkFilename = compilerOptions.output.chunkFilename.replace(
+    /\.([a-z]+)$/i,
+    '.worker.$1'
+  );
   const workerOptions = {
-    filename: chunkFilename.replace(/\[(?:chunkhash|contenthash)(:\d+(?::\d+)?)?\]/g, '[hash$1]'),
+    filename: chunkFilename.replace(
+      /\[(?:chunkhash|contenthash)(:\d+(?::\d+)?)?\]/g,
+      '[hash$1]'
+    ),
     chunkFilename,
     globalObject: pluginOptions.globalObject || 'self'
   };
+  console.log(
+    'workerOptions: ',
+    workerOptions,
+    options,
+    compilerOptions.output
+  );
 
   const plugins = (pluginOptions.plugins || []).map(plugin => {
     if (typeof plugin !== 'string') {
       return plugin;
     }
-    const found = compilerOptions.plugins.find(p => p.constructor.name === plugin);
+    const found = compilerOptions.plugins.find(
+      p => p.constructor.name === plugin
+    );
     if (!found) {
       console.warn(`Warning (worker-plugin): Plugin "${plugin}" is not found.`);
     }
     return found;
   });
 
-  const workerCompiler = this._compilation.createChildCompiler(NAME, workerOptions, plugins);
-  (new WebWorkerTemplatePlugin(workerOptions)).apply(workerCompiler);
-  (new FetchCompileWasmTemplatePlugin({
+  const workerCompiler = this._compilation.createChildCompiler(
+    NAME,
+    workerOptions,
+    plugins
+  );
+  new WebWorkerTemplatePlugin(workerOptions).apply(workerCompiler);
+  new FetchCompileWasmTemplatePlugin({
     mangleImports: compilerOptions.optimization.mangleWasmImports
-  })).apply(workerCompiler);
-  (new SingleEntryPlugin(this.context, request, options.name)).apply(workerCompiler);
+  }).apply(workerCompiler);
+  new SingleEntryPlugin(this.context, request, options.name).apply(
+    workerCompiler
+  );
 
   const subCache = `subcache ${__dirname} ${request}`;
   workerCompiler.hooks.compilation.tap(NAME, compilation => {
@@ -77,8 +108,11 @@ export function pitch (request) {
     const entry = entries && entries[0] && entries[0].files[0];
     if (!err && !entry) err = Error(`WorkerPlugin: no entry for ${request}`);
     if (err) return cb(err);
-    return cb(null, `module.exports = __webpack_public_path__ + ${JSON.stringify(entry)}`);
+    return cb(
+      null,
+      `module.exports = __webpack_public_path__ + ${JSON.stringify(entry)}`
+    );
   });
-};
+}
 
 export default { pitch };

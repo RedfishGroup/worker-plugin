@@ -22,9 +22,6 @@ const NAME = 'WorkerPlugin';
 const JS_TYPES = ['auto', 'esm', 'dynamic'];
 const workerLoader = path.resolve(__dirname, 'loader.js');
 
-let workerId = 0;
-
-
 export default class WorkerPlugin {
   constructor (options) {
     this.options = options || {};
@@ -35,6 +32,7 @@ export default class WorkerPlugin {
     compiler.hooks.normalModuleFactory.tap(NAME, factory => {
       for (const type of JS_TYPES) {
         factory.hooks.parser.for(`javascript/${type}`).tap(NAME, parser => {
+          let workerId = 0;
 
           parser.hooks.new.for('Worker').tap(NAME, expr => {
             const dep = parser.evaluateExpression(expr.arguments[0]);
@@ -53,8 +51,15 @@ export default class WorkerPlugin {
               opts = {};
               for (let i = optsExpr.properties.length; i--;) {
                 const prop = optsExpr.properties[i];
-                if (prop.type === 'Property' && !prop.computed && !prop.shorthand && !prop.method) {
-                  opts[prop.key.name] = parser.evaluateExpression(prop.value).string;
+                if (
+                  prop.type === 'Property' &&
+                  !prop.computed &&
+                  !prop.shorthand &&
+                  !prop.method
+                ) {
+                  opts[prop.key.name] = parser.evaluateExpression(
+                    prop.value
+                  ).string;
 
                   if (prop.key.name === 'type') {
                     typeModuleExpr = prop;
@@ -65,18 +70,32 @@ export default class WorkerPlugin {
 
             if (!opts || opts.type !== 'module') {
               parser.state.module.warnings.push({
-                message: `new Worker() will only be bundled if passed options that include { type: 'module' }.${opts ? `\n  Received: new Worker(${JSON.stringify(dep.string)}, ${JSON.stringify(opts)})` : ''}`
+                message: `new Worker() will only be bundled if passed options that include { type: 'module' }.${
+                  opts
+                    ? `\n  Received: new Worker(${JSON.stringify(
+                      dep.string
+                    )}, ${JSON.stringify(opts)})`
+                    : ''
+                }`
               });
               return false;
             }
 
             let loaderOptions = opts.name && { name: opts.name };
-            const req = `require(${JSON.stringify(workerLoader + (loaderOptions ? ('?' + JSON.stringify(loaderOptions)) : '') + '!' + dep.string)})`;
+            const req = `require(${JSON.stringify(
+              workerLoader +
+                (loaderOptions ? '?' + JSON.stringify(loaderOptions) : '') +
+                '!' +
+                dep.string
+            )})`;
             const id = `__webpack__worker__${++workerId}`;
             ParserHelpers.toConstantDependency(parser, id)(expr.arguments[0]);
 
             if (this.options.workerType) {
-              ParserHelpers.toConstantDependency(parser, JSON.stringify(this.options.workerType))(typeModuleExpr.value);
+              ParserHelpers.toConstantDependency(
+                parser,
+                JSON.stringify(this.options.workerType)
+              )(typeModuleExpr.value);
             } else if (this.options.preserveTypeModule !== true) {
               ParserHelpers.toConstantDependency(parser, '')(typeModuleExpr);
             }
