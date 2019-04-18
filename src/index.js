@@ -22,6 +22,9 @@ const NAME = 'WorkerPlugin';
 const JS_TYPES = ['auto', 'esm', 'dynamic'];
 const workerLoader = path.resolve(__dirname, 'loader.js');
 
+let workerId = 0;
+
+
 export default class WorkerPlugin {
   constructor (options) {
     this.options = options || {};
@@ -32,7 +35,6 @@ export default class WorkerPlugin {
     compiler.hooks.normalModuleFactory.tap(NAME, factory => {
       for (const type of JS_TYPES) {
         factory.hooks.parser.for(`javascript/${type}`).tap(NAME, parser => {
-          let workerId = 0;
 
           parser.hooks.new.for('Worker').tap(NAME, expr => {
             const dep = parser.evaluateExpression(expr.arguments[0]);
